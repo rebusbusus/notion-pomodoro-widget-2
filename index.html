@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pomodoro Timer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tone@14.7.58/build/Tone.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;700&display=swap" rel="stylesheet">
+    <style>
+        /* Custom styles to match the Dark Academia aesthetic */
+        body {
+            font-family: 'Cormorant Garamond', serif;
+            color: #E2D9C3; /* Off-white text */
+            background-color: #2C241E; /* Very dark brown background */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden; /* Prevent scrollbars */
+        }
+        .timer-container {
+            background-color: rgba(30, 25, 20, 0.7); /* Dark, semi-transparent background */
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            padding: 2.5rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            max-width: 400px;
+            width: 100%;
+            text-align: center;
+            border: 1px solid rgba(226, 217, 195, 0.1);
+            backdrop-filter: blur(5px);
+            position: relative; /* Needed for absolute positioning of corners */
+        }
+        /* Corner elements */
+        .timer-container::before,
+        .timer-container::after {
+            content: '';
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            border: 4px solid #586F5C; /* Green border color */
+            pointer-events: none;
+            border-radius: 5px;
+        }
+        .timer-container::before {
+            top: -2px;
+            left: -2px;
+            border-bottom: none;
+            border-right: none;
+        }
+        .timer-container::after {
+            bottom: -2px;
+            right: -2px;
+            border-top: none;
+            border-left: none;
+        }
+        
+        .timer-display {
+            font-family: 'Cormorant Garamond', serif; /* Now using Garamond for the display as well */
+            font-weight: 700;
+            font-size: 5rem;
+            letter-spacing: -0.05em;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+            margin-bottom: 0.5rem;
+        }
+        .timer-label {
+            font-size: 1.25rem;
+            margin-bottom: 2rem;
+            font-style: italic;
+            opacity: 0.8;
+        }
+        .button-group {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1.5rem;
+        }
+        .control-button {
+            padding: 0.75rem 2rem;
+            font-size: 1rem;
+            font-weight: bold;
+            border-radius: 9999px;
+            transition: all 0.2s;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(226, 217, 195, 0.2);
+        }
+        .start-button {
+            background-color: #586F5C;
+            color: #fff;
+        }
+        .start-button:hover {
+            background-color: #6C8570;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+        .reset-button {
+            background-color: #6C5B52;
+            color: #fff;
+        }
+        .reset-button:hover {
+            background-color: #8C756B;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+        .mode-button {
+            background: none;
+            border: none;
+            padding: 0.5rem;
+            cursor: pointer;
+            transition: transform 0.2s;
+            color: #E2D9C3;
+            opacity: 0.7;
+        }
+        .mode-button:hover {
+            opacity: 1;
+            transform: scale(1.1);
+        }
+        @media (max-width: 640px) {
+            .timer-display {
+                font-size: 3rem;
+            }
+            .timer-container {
+                padding: 1.5rem;
+            }
+            .control-button {
+                padding: 0.5rem 1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="timer-container">
+        <!-- Title and session label -->
+        <h1 class="text-xl font-bold mb-4 opacity-80">Pomodoro Timer</h1>
+        <div class="flex items-center space-x-4">
+            <button id="prevMode" class="mode-button">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-left"><path d="m15 18-6-6 6-6"/></svg>
+            </button>
+            <span id="timerLabel" class="timer-label">Work Session</span>
+            <button id="nextMode" class="mode-button">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-right"><path d="m9 18 6-6-6-6"/></svg>
+            </button>
+        </div>
+        
+        <!-- Timer display -->
+        <div id="timerDisplay" class="timer-display">25:00</div>
+        
+        <!-- Control buttons -->
+        <div class="button-group">
+            <button id="startButton" class="control-button start-button">Start</button>
+            <button id="resetButton" class="control-button reset-button">Reset</button>
+        </div>
+    </div>
+
+    <script>
+        // Use a self-contained IIFE (Immediately Invoked Function Expression) for a clean scope
+        (function() {
+            // State variables
+            const workDuration = 25 * 60;
+            const breakDuration = 5 * 60;
+            let currentDuration = workDuration;
+            let timerSeconds = workDuration;
+            let isRunning = false;
+            let intervalId = null;
+            let isWorkSession = true;
+
+            // DOM elements
+            const timerDisplay = document.getElementById('timerDisplay');
+            const timerLabel = document.getElementById('timerLabel');
+            const startButton = document.getElementById('startButton');
+            const resetButton = document.getElementById('resetButton');
+            const prevModeButton = document.getElementById('prevMode');
+            const nextModeButton = document.getElementById('nextMode');
+
+            // Sound player using Tone.js
+            const synth = new Tone.Synth().toDestination();
+            const playAlert = () => {
+                synth.triggerAttackRelease("C4", "8n");
+            };
+
+            // Update the display with formatted time
+            function updateDisplay() {
+                const minutes = Math.floor(timerSeconds / 60);
+                const seconds = timerSeconds % 60;
+                timerDisplay.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            }
+
+            // Timer countdown logic
+            function countdown() {
+                if (timerSeconds > 0) {
+                    timerSeconds--;
+                } else {
+                    clearInterval(intervalId);
+                    isRunning = false;
+                    playAlert();
+                    // Automatically switch to the next timer
+                    isWorkSession = !isWorkSession;
+                    switchMode();
+                    setTimeout(() => startTimer(), 1000); // Start next timer after 1 second
+                }
+                updateDisplay();
+            }
+
+            // Start or pause the timer
+            function startTimer() {
+                if (isRunning) {
+                    clearInterval(intervalId);
+                    startButton.textContent = 'Start';
+                } else {
+                    intervalId = setInterval(countdown, 1000);
+                    startButton.textContent = 'Pause';
+                }
+                isRunning = !isRunning;
+            }
+
+            // Reset the current timer
+            function resetTimer() {
+                clearInterval(intervalId);
+                isRunning = false;
+                startButton.textContent = 'Start';
+                timerSeconds = currentDuration;
+                updateDisplay();
+            }
+
+            // Switch between work and break modes
+            function switchMode() {
+                clearInterval(intervalId);
+                isRunning = false;
+                startButton.textContent = 'Start';
+
+                if (isWorkSession) {
+                    timerLabel.textContent = 'Work Session';
+                    currentDuration = workDuration;
+                } else {
+                    timerLabel.textContent = 'Break Time';
+                    currentDuration = breakDuration;
+                }
+                timerSeconds = currentDuration;
+                updateDisplay();
+            }
+
+            // Event listeners for buttons
+            startButton.addEventListener('click', startTimer);
+            resetButton.addEventListener('click', resetTimer);
+
+            prevModeButton.addEventListener('click', () => {
+                isWorkSession = !isWorkSession;
+                switchMode();
+            });
+
+            nextModeButton.addEventListener('click', () => {
+                isWorkSession = !isWorkSession;
+                switchMode();
+            });
+
+            // Initial setup
+            updateDisplay();
+            lucide.createIcons(); // Initialize Lucide icons
+        })();
+    </script>
+</body>
+</html>
+
