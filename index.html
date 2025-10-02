@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dark Academia Pomodoro Timer with Themed Music</title>
+    <title>Dark Academia Pomodoro Timer</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/tone@14.7.58/build/Tone.min.js"></script>
+    <!-- Removed: <script src="https://cdn.jsdelivr.net/npm/tone@14.7.58/build/Tone.min.js"></script> -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;700&display=swap" rel="stylesheet">
@@ -265,9 +265,6 @@
     </div>
 
     <!-- Audio Elements for Background Music -->
-    <!-- CRITICAL: To ensure audio playback in a local environment, replace the placeholder URL 
-            with the relative path to the MP3 file you upload to your GitHub repository. 
-            Example: src="focus.mp3" -->
     <audio id="workMusic" loop preload="auto" src="Pen Writing .mp3"></audio>
     <audio id="breakMusic" loop preload="auto" src="Bach Cello Suite No. 1, G Major, Prelude - Cooper Cannell.mp3"></audio>
     <audio id="longBreakMusic" loop preload="auto" src="The Dance Before - Nathan Moore.mp3"></audio>
@@ -356,17 +353,52 @@
         // Start volume at 0.1, matching the initial slider value
         let lastVolume = 0.1; 
 
-        // --- Tone.js Sound Setup (for alerts) ---
-        const workSynth = new Tone.MembraneSynth({ oscillator: { type: "square" }, envelope: { attack: 0.005, decay: 0.1, sustain: 0, release: 0.2 }, volume: -10, }).toDestination();
-        const breakSynth = new Tone.Synth({ oscillator: { type: "sine" }, envelope: { attack: 0.01, decay: 0.5, sustain: 0.2, release: 1 }, volume: -15, }).toDestination();
-        const endAlertSynth = new Tone.MetalSynth({ frequency: 100, envelope: { attack: 0.001, decay: 0.4, release: 0.1 }, harmonicity: 5.1, modulationIndex: 32, resonance: 4000, octave: 1.5, volume: -5 }).toDestination();
-        
-        // Start Tone context on first user interaction
-        document.addEventListener('click', () => {
-            if (Tone.context.state !== 'running') {
-                Tone.start().then(() => console.log('Tone.js context started.'));
+        // --- Standard Web Audio API Setup (Replacing Tone.js) ---
+        let audioContext;
+
+        function initAudioContext() {
+            if (!audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
             }
-        }, { once: true });
+        }
+
+        /**
+         * Plays a simple beep sound using the Web Audio API.
+         * @param {number} frequency - The frequency in Hz.
+         * @param {number} duration - The duration in seconds.
+         * @param {number} volume - The volume (gain) from 0 to 1.
+         */
+        function playBeep(frequency, duration, volume = 0.1) {
+            initAudioContext();
+            if (audioContext.state === 'suspended') {
+                audioContext.resume().catch(e => console.error('AudioContext resume failed:', e));
+                return;
+            }
+
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+
+            // Connect oscillator to gain node, and gain node to destination
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+
+            // Set properties
+            oscillator.type = 'sine'; // Sine wave for a gentle tone
+            oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
+
+            // Set volume with a quick fade-in/out
+            const now = audioContext.currentTime;
+            gainNode.gain.setValueAtTime(0, now);
+            gainNode.gain.linearRampToValueAtTime(volume, now + 0.01);
+            gainNode.gain.linearRampToValueAtTime(0, now + duration);
+
+            // Start and stop the oscillator
+            oscillator.start(now);
+            oscillator.stop(now + duration);
+        }
+
+        // Initialize AudioContext on first user interaction (required by browsers)
+        document.addEventListener('click', initAudioContext, { once: true });
 
 
         // --- DOM Elements ---
@@ -528,16 +560,24 @@
             });
         }
 
+        // REPLACED: Tone.js alert with Web Audio API beep
         function playSessionAlert(type) {
-            // Stop all alert sounds
-            workSynth.triggerRelease();
-            breakSynth.triggerRelease();
+            // Use different tones for work vs break transition alerts
+            const frequency = type === 'work' ? 440 : 660; // A4 vs E5
+            playBeep(frequency, 0.2, 0.1); 
+        }
 
-            if (type === 'work') {
-                workSynth.triggerAttack('C3', Tone.now(), 0.5);
-            } else if (type === 'break' || type === 'longBreak') {
-                breakSynth.triggerAttack('G4', Tone.now(), 0.5);
-            }
+        // REPLACED: Tone.js end alert with a triple beep sequence
+        function playEndAlert() {
+             // Triple beep sequence for timer completion
+            const freq1 = 200, freq2 = 400, freq3 = 800;
+            const duration = 0.15;
+            const delay = 0.2;
+            const volume = 0.15;
+
+            playBeep(freq1, duration, volume);
+            setTimeout(() => playBeep(freq2, duration, volume), delay * 1000);
+            setTimeout(() => playBeep(freq3, duration, volume), (delay * 2) * 1000);
         }
 
         // Timer calculation logic based on current state
@@ -575,9 +615,7 @@
             } else {
                 // If paused or reset, stop all sound (music and alert synths) and interval
                 
-                // BUG FIX: Stop any ringing alert synths on pause/reset
-                workSynth.triggerRelease();
-                breakSynth.triggerRelease();
+                // (No need to release synths as they are gone)
                 
                 stopMusic();
                 if (localIntervalId) {
@@ -604,7 +642,7 @@
                     localIntervalId = null;
                     
                     stopMusic();
-                    endAlertSynth.triggerAttackRelease("C5", "4n");
+                    playEndAlert(); // Use the new completion alert
 
                     // Prepare for transition
                     const updates = {
@@ -675,9 +713,9 @@
                             startTime: Date.now(),
                         };
                     } else {
-                           // If queue exists but is paused at 0, start the next queue item
-                           startNextSession(currentState);
-                           return; // Exit as startNextSession handles the update
+                            // If queue exists but is paused at 0, start the next queue item
+                            startNextSession(currentState);
+                            return; // Exit as startNextSession handles the update
                     }
                 } else {
                     // Starting/Resuming: record the current time as the start point
@@ -711,132 +749,130 @@
                 startTime: null,
             };
             updateLocalState(updates);
+            // Manually initiate the next session switch
             startNextSession(currentState);
         });
 
-        // Manual mode switch (only allowed when paused and queue is empty)
-        const handleModeSwitch = (increment) => {
+        // --- MANUAL MODE SWITCHING ---
+
+        function handleModeSwitch(direction) {
             if (currentState.isRunning || currentState.queue.length > 0) return;
 
             const modes = ['work', 'break', 'longBreak'];
-            let currentIndex = modes.indexOf(currentState.sessionType);
-            
-            currentIndex = (currentIndex + increment) % modes.length;
-            if (currentIndex < 0) currentIndex = modes.length - 1;
+            const currentIndex = modes.indexOf(currentState.sessionType);
+            let newIndex = currentIndex;
 
-            const newType = modes[currentIndex];
-            const currentDuration = DURATION_MAP[newType];
+            if (direction === 'next') {
+                newIndex = (currentIndex + 1) % modes.length;
+            } else if (direction === 'prev') {
+                newIndex = (currentIndex - 1 + modes.length) % modes.length;
+            }
 
-            const updates = {
+            const newType = modes[newIndex];
+            updateLocalState({
                 sessionType: newType,
-                timeRemaining: currentDuration,
+                timeRemaining: DURATION_MAP[newType],
                 currentTask: LABEL_MAP[newType],
-            };
-            updateLocalState(updates);
-        };
+                isRunning: false,
+                startTime: null,
+            });
+        }
 
-        prevModeButton.addEventListener('click', () => handleModeSwitch(-1));
-        nextModeButton.addEventListener('click', () => handleModeSwitch(1));
+        nextModeButton.addEventListener('click', () => handleModeSwitch('next'));
+        prevModeButton.addEventListener('click', () => handleModeSwitch('prev'));
 
-        // --- VOLUME CONTROL HANDLERS (NEW) ---
 
-        volumeSlider.addEventListener('input', (e) => {
-            const volume = parseFloat(e.target.value);
-            if (volume > 0) {
-                isMuted = false;
-                lastVolume = volume; // Save last volume before setting
-            }
-            updateVolume(volume);
+        // --- QUEUE HANDLERS ---
+        
+        queueButton.addEventListener('click', () => {
+            queueModal.style.display = 'flex';
         });
 
-        muteButton.addEventListener('click', () => {
-            if (isMuted) {
-                // Unmute: restore last known volume
-                isMuted = false;
-                // Ensure it's not 0, use 0.1 if lastVolume was 0
-                const volumeToSet = lastVolume > 0 ? lastVolume : 0.1; 
-                updateVolume(volumeToSet);
-            } else {
-                // Mute: save current volume and set to 0
-                isMuted = true;
-                // Save current volume from slider (which might be updated by playMusic or previous interactions)
-                lastVolume = parseFloat(volumeSlider.value) > 0 ? parseFloat(volumeSlider.value) : 0.1;
-                updateVolume(0);
-            }
-        });
-
-
-        // --- QUEUE MODAL HANDLERS ---
-
-        queueButton.addEventListener('click', () => queueModal.style.display = 'flex');
-        closeModalButton.addEventListener('click', () => queueModal.style.display = 'none');
-        window.addEventListener('click', (event) => {
-            if (event.target === queueModal) {
-                queueModal.style.display = 'none';
-            }
+        closeModalButton.addEventListener('click', () => {
+            queueModal.style.display = 'none';
         });
 
         document.querySelectorAll('.add-task-btn').forEach(button => {
             button.addEventListener('click', (e) => {
                 const type = e.currentTarget.getAttribute('data-type');
-                const rawName = taskNameInput.value.trim();
+                const taskName = taskNameInput.value.trim() || LABEL_MAP[type];
                 
-                // Use the typed name, or fall back to a default label
-                const name = rawName || `${LABEL_MAP[type].replace(' Session', '').replace(' Rest', '')} Session`; 
-
-                const newItem = {
-                    id: Date.now() + Math.random(), 
-                    name: name,
+                const newTask = {
+                    id: Date.now() + Math.random(), // Simple unique ID
+                    name: taskName,
                     type: type,
                 };
-
-                const newQueue = [...currentState.queue, newItem];
                 
-                // Update the queue array locally
+                const newQueue = [...currentState.queue, newTask];
                 updateLocalState({ queue: newQueue });
-                taskNameInput.value = ''; // Clear input field
+
+                // Clear input after adding
+                taskNameInput.value = '';
+                // Keep the modal open
             });
         });
 
         function handleDeleteTask(taskId) {
-            const newQueue = currentState.queue.filter(item => item.id != taskId);
+            const newQueue = currentState.queue.filter(task => task.id != taskId);
             updateLocalState({ queue: newQueue });
         }
-        
+
         clearQueueButton.addEventListener('click', () => {
-             updateLocalState({ queue: [] });
+            updateLocalState({ queue: [] });
         });
 
         runQueueButton.addEventListener('click', () => {
-            if (currentState.queue.length === 0) return;
-
-            // Check if we are currently running, if so, do nothing but close the modal.
-            if (currentState.isRunning) {
-                 queueModal.style.display = 'none';
-                 return;
+            if (currentState.queue.length > 0) {
+                // If currently running, the next session will start the queue automatically.
+                // If paused or reset, start the next session immediately.
+                if (!currentState.isRunning || currentState.timeRemaining === 0) {
+                    startNextSession(currentState);
+                } else {
+                    // If timer is already running, just close the modal.
+                }
+                queueModal.style.display = 'none';
             }
-
-            // Start the first session from the queue
-            startNextSession(currentState);
-            queueModal.style.display = 'none';
         });
 
         // --- INITIALIZATION ---
         
-        function initMusicMap() {
+        function init() {
+            // Map audio elements to MUSIC_MAP
             MUSIC_MAP.work = document.getElementById('workMusic');
             MUSIC_MAP.break = document.getElementById('breakMusic');
             MUSIC_MAP.longBreak = document.getElementById('longBreakMusic');
+            
+            // Set initial volume
+            updateVolume(volumeSlider.value);
+
+            // Attach volume control listeners
+            volumeSlider.addEventListener('input', (e) => {
+                const newVolume = parseFloat(e.target.value);
+                updateVolume(newVolume);
+                lastVolume = newVolume; // Save last volume
+                isMuted = newVolume === 0;
+            });
+
+            muteButton.addEventListener('click', () => {
+                if (isMuted) {
+                    // Unmute
+                    const newVolume = lastVolume > 0 ? lastVolume : 0.1;
+                    updateVolume(newVolume);
+                    isMuted = false;
+                } else {
+                    // Mute
+                    lastVolume = parseFloat(volumeSlider.value); // Save current volume before muting
+                    updateVolume(0);
+                    isMuted = true;
+                    stopMusic(); // Stop music immediately on mute
+                }
+            });
+
+            // Set initial state
+            updateLocalState({});
         }
 
-        window.onload = function () {
-            initMusicMap(); 
-            // Initialize volume for the audio elements and the UI
-            updateVolume(lastVolume);
-            updateUI(INITIAL_STATE); // Initialize UI with default state
-            lucide.createIcons();
-        };
-
+        window.onload = init;
     </script>
 </body>
 </html>
