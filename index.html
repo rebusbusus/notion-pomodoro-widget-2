@@ -133,6 +133,35 @@
             transform: scale(1.1);
         }
 
+        /* Volume Slider Custom Styles (for Dark Academia look) */
+        #volumeSlider {
+            -webkit-appearance: none;
+            appearance: none;
+            background: #6C5B52;
+            height: 8px;
+            cursor: pointer;
+        }
+        #volumeSlider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #E2D9C3; /* Knob color */
+            border: 2px solid #586F5C;
+            cursor: pointer;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.5);
+        }
+        #volumeSlider::-moz-range-thumb {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #E2D9C3;
+            border: 2px solid #586F5C;
+            cursor: pointer;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.5);
+        }
+
         /* Modal specific styles */
         .modal {
             position: fixed;
@@ -221,6 +250,18 @@
                 <span id="queueCount">Queue (0)</span> | <span id="nextTaskInfo">Manual Cycle</span>
             </button>
         </div>
+
+        <!-- Volume Controls (NEW FEATURE) -->
+        <div class="mt-4 w-full flex items-center justify-center space-x-3 text-sm opacity-90">
+            <!-- Mute Button -->
+            <button id="muteButton" class="mode-button p-2" title="Toggle Mute">
+                <!-- Initial high volume icon, updated by JS -->
+                <svg id="muteIcon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-volume-2 h-5 w-5"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+            </button>
+
+            <!-- Volume Slider -->
+            <input type="range" id="volumeSlider" min="0" max="1" step="0.05" value="0.1" class="w-2/3 h-2 rounded-lg appearance-none cursor-pointer">
+        </div>
     </div>
 
     <!-- Audio Elements for Background Music -->
@@ -228,7 +269,7 @@
             with the relative path to the MP3 file you upload to your GitHub repository. 
             Example: src="focus.mp3" -->
     <audio id="workMusic" loop preload="auto" src="Pen Writing .mp3"></audio>
-    <audio id="breakMusic" loop preload="auto" src="Dream Big - Jeremy Korpas.mp3"></audio>
+    <audio id="breakMusic" loop preload="auto" src="Bach Cello Suite No. 1, G Major, Prelude - Cooper Cannell.mp3"></audio>
     <audio id="longBreakMusic" loop preload="auto" src="The Dance Before - Nathan Moore.mp3"></audio>
 
     <!-- The Queue Modal -->
@@ -309,6 +350,11 @@
         let localIntervalId = null;
         let currentState = { ...INITIAL_STATE };
         let previousSessionType = null; // Tracked locally for music logic
+        
+        // --- Volume State --- (NEW)
+        let isMuted = false;
+        // Start volume at 0.1, matching the initial slider value
+        let lastVolume = 0.1; 
 
         // --- Tone.js Sound Setup (for alerts) ---
         const workSynth = new Tone.MembraneSynth({ oscillator: { type: "square" }, envelope: { attack: 0.005, decay: 0.1, sustain: 0, release: 0.2 }, volume: -10, }).toDestination();
@@ -343,8 +389,39 @@
         const runQueueButton = document.getElementById('runQueueButton');
         const clearQueueButton = document.getElementById('clearQueueButton');
 
+        // NEW VOLUME ELEMENTS
+        const volumeSlider = document.getElementById('volumeSlider');
+        const muteButton = document.getElementById('muteButton');
+
 
         // --- UTILITY FUNCTIONS ---
+
+        // NEW: Handles setting the volume and updating the mute icon
+        function updateVolume(volume) {
+            const vol = parseFloat(volume);
+            
+            // Set volume on all audio elements
+            Object.values(MUSIC_MAP).forEach(audio => {
+                audio.volume = vol;
+            });
+
+            // Update slider position
+            volumeSlider.value = vol;
+
+            // Update mute button icon
+            const currentVolume = vol;
+            let iconHtml;
+            
+            // Use the correct icon based on volume level
+            if (currentVolume == 0) {
+                iconHtml = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-volume-x h-5 w-5"><path d="M11 5 6 9 2 9 2 15 6 15 11 19z"/><line x1="22" x2="16" y1="9" y2="15"/><line x1="16" x2="22" y1="9" y2="15"/></svg>`;
+            } else if (currentVolume < 0.5) {
+                iconHtml = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-volume-1 h-5 w-5"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>`;
+            } else {
+                iconHtml = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-volume-2 h-5 w-5"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>`;
+            }
+            muteButton.innerHTML = iconHtml;
+        }
 
         function formatTime(seconds) {
             const minutes = Math.floor(seconds / 60);
@@ -358,7 +435,8 @@
 
             const audio = MUSIC_MAP[type];
             if (audio) {
-                audio.volume = 0.2; // Keep background music subtle
+                // Use the current volume from the slider/state
+                audio.volume = parseFloat(volumeSlider.value); 
                 audio.currentTime = 0; // Ensure playback starts from the beginning
                 // Attempt to play, catching the common promise error
                 audio.play().catch(e => {
@@ -495,7 +573,12 @@
                     startLocalTick();
                 }
             } else {
-                // If paused or reset, stop music and interval
+                // If paused or reset, stop all sound (music and alert synths) and interval
+                
+                // BUG FIX: Stop any ringing alert synths on pause/reset
+                workSynth.triggerRelease();
+                breakSynth.triggerRelease();
+                
                 stopMusic();
                 if (localIntervalId) {
                     clearInterval(localIntervalId);
@@ -655,6 +738,34 @@
         prevModeButton.addEventListener('click', () => handleModeSwitch(-1));
         nextModeButton.addEventListener('click', () => handleModeSwitch(1));
 
+        // --- VOLUME CONTROL HANDLERS (NEW) ---
+
+        volumeSlider.addEventListener('input', (e) => {
+            const volume = parseFloat(e.target.value);
+            if (volume > 0) {
+                isMuted = false;
+                lastVolume = volume; // Save last volume before setting
+            }
+            updateVolume(volume);
+        });
+
+        muteButton.addEventListener('click', () => {
+            if (isMuted) {
+                // Unmute: restore last known volume
+                isMuted = false;
+                // Ensure it's not 0, use 0.1 if lastVolume was 0
+                const volumeToSet = lastVolume > 0 ? lastVolume : 0.1; 
+                updateVolume(volumeToSet);
+            } else {
+                // Mute: save current volume and set to 0
+                isMuted = true;
+                // Save current volume from slider (which might be updated by playMusic or previous interactions)
+                lastVolume = parseFloat(volumeSlider.value) > 0 ? parseFloat(volumeSlider.value) : 0.1;
+                updateVolume(0);
+            }
+        });
+
+
         // --- QUEUE MODAL HANDLERS ---
 
         queueButton.addEventListener('click', () => queueModal.style.display = 'flex');
@@ -713,13 +824,15 @@
         // --- INITIALIZATION ---
         
         function initMusicMap() {
-             MUSIC_MAP.work = document.getElementById('workMusic');
-             MUSIC_MAP.break = document.getElementById('breakMusic');
-             MUSIC_MAP.longBreak = document.getElementById('longBreakMusic');
+            MUSIC_MAP.work = document.getElementById('workMusic');
+            MUSIC_MAP.break = document.getElementById('breakMusic');
+            MUSIC_MAP.longBreak = document.getElementById('longBreakMusic');
         }
 
         window.onload = function () {
             initMusicMap(); 
+            // Initialize volume for the audio elements and the UI
+            updateVolume(lastVolume);
             updateUI(INITIAL_STATE); // Initialize UI with default state
             lucide.createIcons();
         };
