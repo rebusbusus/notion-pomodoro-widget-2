@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pomodoro Timer</title>
+    <title>Dark Academia Pomodoro Timer with Themed Music</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/tone@14.7.58/build/Tone.min.js"></script>
@@ -14,14 +14,14 @@
         /* Custom styles to match the Dark Academia aesthetic */
         body {
             font-family: 'Cormorant Garamond', serif;
-            color: #E2D9C3; /* Off-white text */
+            color: #E2D9C3; /* Off-white text, used as the new warm beige button text colour */
             background-color: #2C241E; /* Very dark brown background */
             display: flex;
             justify-content: center;
             align-items: center;
             height: 100vh;
             margin: 0;
-            overflow: hidden; /* Prevent scrollbars */
+            overflow: hidden; /* Prevent scroll-bars */
         }
         .timer-container {
             background-color: rgba(30, 25, 20, 0.7); /* Dark, semi-transparent background */
@@ -38,14 +38,14 @@
             backdrop-filter: blur(5px);
             position: relative; /* Needed for absolute positioning of corners */
         }
-        /* Corner elements */
+        /* Corner elements for aesthetic */
         .timer-container::before,
         .timer-container::after {
             content: '';
             position: absolute;
             width: 30px;
             height: 30px;
-            border: 4px solid #586F5C; /* Green border color */
+            border: 4px solid #586F5C; /* Green border colour */
             pointer-events: none;
             border-radius: 5px;
         }
@@ -63,18 +63,26 @@
         }
         
         .timer-display {
-            font-family: 'Cormorant Garamond', serif; /* Now using Garamond for the display as well */
+            font-family: 'Cormorant Garamond', serif;
             font-weight: 700;
             font-size: 5rem;
             letter-spacing: -0.05em;
             text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
             margin-bottom: 0.5rem;
         }
+        /* Alignment Fix: Removed margin-bottom and made it display flex for perfect vertical centring with arrows */
+        .session-nav-group {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            space-x-4: 1rem;
+            margin-bottom: 2rem; /* Added spacing to the container instead */
+        }
         .timer-label {
             font-size: 1.25rem;
-            margin-bottom: 2rem;
             font-style: italic;
             opacity: 0.8;
+            margin: 0; /* Ensures the label doesn't push the arrows out of alignment */
         }
         .button-group {
             display: flex;
@@ -92,20 +100,21 @@
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
             border: 1px solid rgba(226, 217, 195, 0.2);
         }
+        .start-button, .reset-button {
+            color: #E2D9C3; /* Warm beige colour */
+        }
         .start-button {
             background-color: #586F5C;
-            color: #fff;
         }
-        .start-button:hover {
+        .start-button:hover:not(:disabled) {
             background-color: #6C8570;
             transform: translateY(-2px);
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
         }
         .reset-button {
             background-color: #6C5B52;
-            color: #fff;
         }
-        .reset-button:hover {
+        .reset-button:hover:not(:disabled) {
             background-color: #8C756B;
             transform: translateY(-2px);
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
@@ -119,153 +128,602 @@
             color: #E2D9C3;
             opacity: 0.7;
         }
-        .mode-button:hover {
+        .mode-button:hover:not(:disabled) {
             opacity: 1;
             transform: scale(1.1);
         }
+
+        /* Modal specific styles */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+        .modal-content {
+            background-color: #3C342E; /* Darker than container */
+            border: 2px solid #586F5C;
+            border-radius: 12px;
+            padding: 2rem;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+        }
+        .queue-item {
+            background-color: rgba(60, 52, 46, 0.9);
+            border-left: 4px solid;
+            padding: 0.75rem;
+            border-radius: 4px;
+        }
+        .work-border { border-left-color: #8a3024; } /* Brick Terracotta for work */
+        .break-border { border-left-color: #586F5C; } /* Greenish for break */
+        .long-break-border { border-left-color: #665a55; } /* Greyish for long break */
+        
+        /* Modal Add Task Buttons - Text colour fix */
+        .add-task-btn {
+            color: #E2D9C3 !important; /* Ensure modal button text is also warm beige */
+        }
+
         @media (max-width: 640px) {
             .timer-display {
-                font-size: 3rem;
+                font-size: 3.5rem;
             }
             .timer-container {
                 padding: 1.5rem;
             }
             .control-button {
-                padding: 0.5rem 1.5rem;
+                padding: 0.5rem 1rem;
+            }
+            .button-group {
+                gap: 0.5rem;
             }
         }
     </style>
 </head>
 <body>
     <div class="timer-container">
-        <!-- Title and session label -->
-        <h1 class="text-xl font-bold mb-4 opacity-80">Pomodoro Timer</h1>
-        <div class="flex items-center space-x-4">
-            <button id="prevMode" class="mode-button">
+        <!-- Status and Title -->
+        <h1 class="text-xl font-bold mb-4 opacity-80">The Scholar's Focus</h1>
+        <p id="currentTaskDisplay" class="text-md font-style: italic mb-2 opacity-90 truncate w-full px-4">Loading Task...</p>
+
+        <!-- Session Label (FIXED ALIGNMENT: Replaced class 'flex items-center space-x-4' with 'session-nav-group') -->
+        <div class="session-nav-group">
+            <button id="prevMode" class="mode-button" title="Previous Mode">
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-left"><path d="m15 18-6-6 6-6"/></svg>
             </button>
-            <span id="timerLabel" class="timer-label">Work Session</span>
-            <button id="nextMode" class="mode-button">
+            <span id="timerLabel" class="timer-label">Loading Session...</span>
+            <button id="nextMode" class="mode-button" title="Next Mode">
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-right"><path d="m9 18 6-6-6-6"/></svg>
             </button>
         </div>
         
         <!-- Timer display -->
-        <div id="timerDisplay" class="timer-display">25:00</div>
+        <div id="timerDisplay" class="timer-display">--:--</div>
         
         <!-- Control buttons -->
         <div class="button-group">
             <button id="startButton" class="control-button start-button">Start</button>
             <button id="resetButton" class="control-button reset-button">Reset</button>
+            <button id="skipButton" class="control-button reset-button px-4 py-2" title="Skip Session/Next Queue Item">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-skip-forward h-5 w-5"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" x2="19" y1="5" y2="19"/></svg>
+            </button>
+        </div>
+
+        <!-- Queue Button & Next Task Info -->
+        <div class="mt-6 w-full px-4">
+            <button id="queueButton" class="w-full control-button start-button !bg-[#586F5C] hover:!bg-[#6C8570] text-sm py-2">
+                <span id="queueCount">Queue (0)</span> | <span id="nextTaskInfo">Manual Cycle</span>
+            </button>
         </div>
     </div>
 
+    <!-- Audio Elements for Background Music -->
+    <!-- CRITICAL: To ensure audio playback in a local environment, replace the placeholder URL 
+            with the relative path to the MP3 file you upload to your GitHub repository. 
+            Example: src="focus.mp3" -->
+    <audio id="workMusic" loop preload="auto" src="Pen Writing .mp3"></audio>
+    <audio id="breakMusic" loop preload="auto" src="Dream Big - Jeremy Korpas.mp3"></audio>
+    <audio id="longBreakMusic" loop preload="auto" src="The Dance Before - Nathan Moore.mp3"></audio>
+
+    <!-- The Queue Modal -->
+    <div id="queueModal" class="modal">
+        <!-- MODIFICATION: Changed text-white to text-[#E2D9C3] to use off-white text color -->
+        <div class="modal-content text-[#E2D9C3]"> 
+            <h2 class="text-2xl font-bold mb-4 border-b border-gray-600 pb-2 flex justify-between items-center">
+                Study Queue
+                <button id="closeModalButton" class="text-gray-400 hover:text-white">&times;</button>
+            </h2>
+
+            <!-- Add Task Input -->
+            <div class="mb-4">
+                <input type="text" id="taskNameInput" placeholder="Enter task name (e.g., Chapter 3 Review)"
+                        class="w-full p-2 rounded-lg bg-[#2C241E] border border-[#586F5C] text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-[#586F5C]">
+            </div>
+
+            <!-- Add Task Buttons -->
+            <div class="flex gap-2 mb-6 justify-center flex-wrap">
+                <!-- Brick Terracotta button colour for work sessions -->
+                <button data-type="work" class="add-task-btn control-button !bg-[#8a3024] text-white text-xs py-2 px-3 hover:!bg-[#8a392f]">
+                    + 25m Focus
+                </button>
+                <button data-type="break" class="add-task-btn control-button !bg-[#586F5C] text-white text-xs py-2 px-3 hover:!bg-[#6C8570]">
+                    + 5m Break
+                </button>
+                <button data-type="longBreak" class="add-task-btn control-button !bg-[#665a55] text-white text-xs py-2 px-3 hover:!bg-[#69605c]">
+                    + 15m Rest
+                </button>
+            </div>
+
+            <!-- Queue List -->
+            <h3 class="text-lg font-semibold mb-2">Next Sessions:</h3>
+            <div id="queueList" class="space-y-2 max-h-48 overflow-y-auto pr-2">
+                <!-- Queue items will be inserted here -->
+                <p id="queueEmptyMessage" class="text-sm text-gray-500 italic">Queue is currently empty.</p>
+            </div>
+
+            <div class="mt-6 flex justify-between">
+                <!-- MODIFICATION: Changed text-white to text-[#E2D9C3] for off-white button text -->
+                <button id="clearQueueButton" class="control-button !bg-[#6C5B52] text-[#E2D9C3] text-sm py-2 px-4 hover:!bg-[#8C756B]">
+                    Clear All
+                </button>
+                <button id="runQueueButton" class="control-button start-button text-sm py-2 px-4">
+                    Run Queue
+                </button>
+            </div>
+        </div>
+    </div>
+
+
     <script>
-        // Use a self-contained IIFE (Immediately Invoked Function Expression) for a clean scope
-        (function() {
-            // State variables
-            const workDuration = 25 * 60;
-            const breakDuration = 5 * 60;
-            let currentDuration = workDuration;
-            let timerSeconds = workDuration;
-            let isRunning = false;
-            let intervalId = null;
-            let isWorkSession = true;
+        // --- Configuration ---
+        const WORK_DURATION = 25 * 60;
+        const BREAK_DURATION = 5 * 60;
+        const LONG_BREAK_DURATION = 15 * 60;
+        const DURATION_MAP = {
+            work: WORK_DURATION,
+            break: BREAK_DURATION,
+            longBreak: LONG_BREAK_DURATION,
+        };
+        const LABEL_MAP = {
+            work: 'Focus Session',
+            break: 'Short Break',
+            longBreak: 'Long Rest',
+        };
+        const MUSIC_MAP = {}; 
 
-            // DOM elements
-            const timerDisplay = document.getElementById('timerDisplay');
-            const timerLabel = document.getElementById('timerLabel');
-            const startButton = document.getElementById('startButton');
-            const resetButton = document.getElementById('resetButton');
-            const prevModeButton = document.getElementById('prevMode');
-            const nextModeButton = document.getElementById('nextMode');
+        const INITIAL_STATE = {
+            isRunning: false,
+            sessionType: 'work', // 'work', 'break', 'longBreak'
+            timeRemaining: WORK_DURATION,
+            startTime: null, // UTC timestamp of start/resume
+            currentTask: 'Manual Focus',
+            queue: [], // [{ id: number, name: string, type: 'work' | 'break' | 'longBreak' }]
+        };
 
-            // Sound player using Tone.js
-            const synth = new Tone.Synth().toDestination();
-            const playAlert = () => {
-                synth.triggerAttackRelease("C4", "8n");
+        let localIntervalId = null;
+        let currentState = { ...INITIAL_STATE };
+        let previousSessionType = null; // Tracked locally for music logic
+
+        // --- Tone.js Sound Setup (for alerts) ---
+        const workSynth = new Tone.MembraneSynth({ oscillator: { type: "square" }, envelope: { attack: 0.005, decay: 0.1, sustain: 0, release: 0.2 }, volume: -10, }).toDestination();
+        const breakSynth = new Tone.Synth({ oscillator: { type: "sine" }, envelope: { attack: 0.01, decay: 0.5, sustain: 0.2, release: 1 }, volume: -15, }).toDestination();
+        const endAlertSynth = new Tone.MetalSynth({ frequency: 100, envelope: { attack: 0.001, decay: 0.4, release: 0.1 }, harmonicity: 5.1, modulationIndex: 32, resonance: 4000, octave: 1.5, volume: -5 }).toDestination();
+        
+        // Start Tone context on first user interaction
+        document.addEventListener('click', () => {
+            if (Tone.context.state !== 'running') {
+                Tone.start().then(() => console.log('Tone.js context started.'));
+            }
+        }, { once: true });
+
+
+        // --- DOM Elements ---
+        const timerDisplay = document.getElementById('timerDisplay');
+        const timerLabel = document.getElementById('timerLabel');
+        const startButton = document.getElementById('startButton');
+        const resetButton = document.getElementById('resetButton');
+        const skipButton = document.getElementById('skipButton');
+        const prevModeButton = document.getElementById('prevMode');
+        const nextModeButton = document.getElementById('nextMode');
+        const queueButton = document.getElementById('queueButton');
+        const currentTaskDisplay = document.getElementById('currentTaskDisplay');
+        const queueModal = document.getElementById('queueModal');
+        const closeModalButton = document.getElementById('closeModalButton');
+        const taskNameInput = document.getElementById('taskNameInput');
+        const queueList = document.getElementById('queueList');
+        const queueEmptyMessage = document.getElementById('queueEmptyMessage');
+        const queueCountDisplay = document.getElementById('queueCount');
+        const nextTaskInfoDisplay = document.getElementById('nextTaskInfo');
+        const runQueueButton = document.getElementById('runQueueButton');
+        const clearQueueButton = document.getElementById('clearQueueButton');
+
+
+        // --- UTILITY FUNCTIONS ---
+
+        function formatTime(seconds) {
+            const minutes = Math.floor(seconds / 60);
+            const secs = Math.floor(seconds % 60);
+            return `${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        function playMusic(type) {
+            // Stop all music first
+            Object.values(MUSIC_MAP).forEach(audio => audio.pause());
+
+            const audio = MUSIC_MAP[type];
+            if (audio) {
+                audio.volume = 0.2; // Keep background music subtle
+                audio.currentTime = 0; // Ensure playback starts from the beginning
+                // Attempt to play, catching the common promise error
+                audio.play().catch(e => {
+                    console.warn("Autoplay was prevented or resource failed to load. User interaction is required for audio playback.", e);
+                });
+            }
+        }
+
+        function stopMusic() {
+            Object.values(MUSIC_MAP).forEach(audio => {
+                audio.pause();
+                audio.currentTime = 0; // Reset music to start of track on next play
+            });
+        }
+
+
+        function updateUI(state) {
+            // Update Timer Display
+            timerDisplay.textContent = formatTime(state.timeRemaining);
+            timerLabel.textContent = LABEL_MAP[state.sessionType];
+            currentTaskDisplay.textContent = `Task: ${state.currentTask}`;
+            document.title = state.isRunning 
+                ? `${formatTime(state.timeRemaining)} | ${state.currentTask}` 
+                : 'The Scholar\'s Focus';
+
+            // Update Start/Pause Button
+            startButton.textContent = state.isRunning ? 'Pause' : 'Start';
+            // Brick Terracotta colour for paused/work mode button
+            const startClass = state.isRunning ? '!bg-[#8a3024]' : 'start-button'; 
+            startButton.className = `control-button ${startClass}`;
+
+            // Update Queue Info
+            queueCountDisplay.textContent = `Queue (${state.queue.length})`;
+            
+            const isQueueActive = state.queue.length > 0;
+
+            if (isQueueActive) {
+                const nextItem = state.queue[0];
+                const nextLabel = LABEL_MAP[nextItem.type].split(' ')[0];
+                nextTaskInfoDisplay.textContent = `Next: ${nextItem.name} (${nextLabel})`;
+                // Disable manual mode switch if queue is active
+                prevModeButton.disabled = true;
+                nextModeButton.disabled = true;
+            } else {
+                nextTaskInfoDisplay.textContent = 'Manual Cycle';
+                // Only disable manual switch if running
+                prevModeButton.disabled = state.isRunning;
+                nextModeButton.disabled = state.isRunning;
+            }
+
+            // Highlight border based on session type
+            const container = document.querySelector('.timer-container');
+            // Brick Terracotta colour for work session border
+            container.style.borderColor = state.sessionType === 'work' ? '#8a3024' : (state.sessionType === 'longBreak' ? '#665a55' : '#586F5C');
+
+            // Re-render queue list in modal
+            renderQueueList(state.queue);
+        }
+
+        function renderQueueList(queue) {
+            queueList.innerHTML = '';
+            if (queue.length === 0) {
+                queueEmptyMessage.style.display = 'block';
+                return;
+            }
+            queueEmptyMessage.style.display = 'none';
+
+            queue.forEach((item, index) => {
+                const itemDiv = document.createElement('div');
+                const durationLabel = item.type === 'work' ? '25m' : (item.type === 'longBreak' ? '15m' : '5m');
+                const borderClass = item.type === 'work' ? 'work-border' : (item.type === 'longBreak' ? 'long-break-border' : 'break-border');
+
+                itemDiv.className = `queue-item flex justify-between items-center ${borderClass}`;
+                itemDiv.innerHTML = `
+                    <span class="text-sm font-medium mr-2">${index + 1}. ${item.name} <span class="opacity-70">(${durationLabel})</span></span>
+                    <button data-id="${item.id}" class="delete-task-btn text-gray-400 hover:text-red-400 p-1 transition leading-none">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-x"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                    </button>
+                `;
+                queueList.appendChild(itemDiv);
+            });
+
+            // Re-attach delete listeners
+            document.querySelectorAll('.delete-task-btn').forEach(button => {
+                button.addEventListener('click', (e) => {
+                    const taskId = e.currentTarget.getAttribute('data-id');
+                    handleDeleteTask(taskId);
+                });
+            });
+        }
+
+        function playSessionAlert(type) {
+            // Stop all alert sounds
+            workSynth.triggerRelease();
+            breakSynth.triggerRelease();
+
+            if (type === 'work') {
+                workSynth.triggerAttack('C3', Tone.now(), 0.5);
+            } else if (type === 'break' || type === 'longBreak') {
+                breakSynth.triggerAttack('G4', Tone.now(), 0.5);
+            }
+        }
+
+        // Timer calculation logic based on current state
+        function calculateTimeRemaining(state) {
+            if (!state.isRunning || !state.startTime) {
+                return state.timeRemaining;
+            }
+            // Use current state's remaining time minus elapsed time since start
+            const elapsedSeconds = Math.floor((Date.now() - state.startTime) / 1000);
+            return Math.max(0, state.timeRemaining - elapsedSeconds);
+        }
+
+        // Local State Update Core
+        function updateLocalState(updates) {
+            const wasRunning = currentState.isRunning;
+            const wasSessionType = currentState.sessionType;
+
+            // Update state immediately
+            currentState = { ...currentState, ...updates };
+            
+            // If we are starting/resuming, we must recalculate the true remaining time first
+            currentState.timeRemaining = calculateTimeRemaining(currentState);
+
+            // --- Music, Tick, and Transition Control ---
+            if (currentState.isRunning) {
+                // If starting or if the session type just changed, play music and alert
+                if (!wasRunning || currentState.sessionType !== wasSessionType) {
+                    playMusic(currentState.sessionType);
+                    playSessionAlert(currentState.sessionType); 
+                }
+                // Ensure local interval is running for smooth 1-second ticks
+                if (!localIntervalId) {
+                    startLocalTick();
+                }
+            } else {
+                // If paused or reset, stop music and interval
+                stopMusic();
+                if (localIntervalId) {
+                    clearInterval(localIntervalId);
+                    localIntervalId = null;
+                }
+            }
+
+            updateUI(currentState);
+        }
+
+        // --- TIMER CORE LOGIC ---
+
+        function startLocalTick() {
+            if (localIntervalId) clearInterval(localIntervalId);
+            localIntervalId = setInterval(() => {
+                // Update local UI state for smooth tick
+                currentState.timeRemaining = Math.max(0, currentState.timeRemaining - 1);
+                updateUI(currentState);
+
+                // When local countdown hits 0, trigger stop/switch logic
+                if (currentState.timeRemaining <= 0) {
+                    clearInterval(localIntervalId);
+                    localIntervalId = null;
+                    
+                    stopMusic();
+                    endAlertSynth.triggerAttackRelease("C5", "4n");
+
+                    // Prepare for transition
+                    const updates = {
+                        isRunning: false,
+                        timeRemaining: 0,
+                        startTime: null,
+                    };
+                    updateLocalState(updates);
+                    
+                    // Trigger the transition logic
+                    startNextSession(currentState);
+                }
+            }, 1000);
+        }
+        
+        // --- QUEUE & SESSION FLOW ---
+
+        function startNextSession(state) {
+            const queue = [...state.queue];
+
+            if (queue.length > 0) {
+                const nextItem = queue.shift();
+                const nextDuration = DURATION_MAP[nextItem.type];
+                
+                const updates = {
+                    isRunning: true,
+                    sessionType: nextItem.type,
+                    timeRemaining: nextDuration,
+                    startTime: Date.now(),
+                    currentTask: nextItem.name,
+                    queue: queue, // Save the rest of the queue
+                };
+                updateLocalState(updates);
+            } else {
+                // Revert to default manual cycle when queue is empty
+                const nextType = state.sessionType === 'work' ? 'break' : 'work';
+                const nextDuration = DURATION_MAP[nextType];
+
+                const updates = {
+                    isRunning: false, // Stop running, wait for manual start
+                    sessionType: nextType,
+                    timeRemaining: nextDuration,
+                    startTime: null,
+                    currentTask: LABEL_MAP[nextType],
+                };
+                updateLocalState(updates);
+            }
+        }
+
+        // --- EVENT HANDLERS ---
+
+        startButton.addEventListener('click', () => {
+            const isStarting = !currentState.isRunning;
+            let updates = {
+                isRunning: isStarting,
             };
 
-            // Update the display with formatted time
-            function updateDisplay() {
-                const minutes = Math.floor(timerSeconds / 60);
-                const seconds = timerSeconds % 60;
-                timerDisplay.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-            }
-
-            // Timer countdown logic
-            function countdown() {
-                if (timerSeconds > 0) {
-                    timerSeconds--;
+            if (isStarting) {
+                if (currentState.timeRemaining === 0) {
+                    // If timer is at 0, initiate the next session logic
+                    if (currentState.queue.length === 0) {
+                        const nextType = currentState.sessionType === 'work' ? 'break' : 'work';
+                        updates = {
+                            sessionType: nextType,
+                            timeRemaining: DURATION_MAP[nextType],
+                            currentTask: LABEL_MAP[nextType],
+                            isRunning: true,
+                            startTime: Date.now(),
+                        };
+                    } else {
+                           // If queue exists but is paused at 0, start the next queue item
+                           startNextSession(currentState);
+                           return; // Exit as startNextSession handles the update
+                    }
                 } else {
-                    clearInterval(intervalId);
-                    isRunning = false;
-                    playAlert();
-                    // Automatically switch to the next timer
-                    isWorkSession = !isWorkSession;
-                    switchMode();
-                    setTimeout(() => startTimer(), 1000); // Start next timer after 1 second
+                    // Starting/Resuming: record the current time as the start point
+                    updates.startTime = Date.now();
+                    updates.timeRemaining = currentState.timeRemaining; // Use current remaining time
                 }
-                updateDisplay();
+            } else {
+                // Pausing: reset start time and lock remaining time
+                updates.startTime = null;
+                updates.timeRemaining = calculateTimeRemaining(currentState);
             }
 
-            // Start or pause the timer
-            function startTimer() {
-                if (isRunning) {
-                    clearInterval(intervalId);
-                    startButton.textContent = 'Start';
-                } else {
-                    intervalId = setInterval(countdown, 1000);
-                    startButton.textContent = 'Pause';
-                }
-                isRunning = !isRunning;
+            updateLocalState(updates);
+        });
+
+        resetButton.addEventListener('click', () => {
+            const currentDuration = DURATION_MAP[currentState.sessionType];
+            const updates = {
+                isRunning: false,
+                timeRemaining: currentDuration,
+                startTime: null,
+            };
+            updateLocalState(updates);
+        });
+
+        skipButton.addEventListener('click', () => {
+            // Trigger a clean stop and then transition to the next state
+            const updates = {
+                isRunning: false,
+                timeRemaining: 0,
+                startTime: null,
+            };
+            updateLocalState(updates);
+            startNextSession(currentState);
+        });
+
+        // Manual mode switch (only allowed when paused and queue is empty)
+        const handleModeSwitch = (increment) => {
+            if (currentState.isRunning || currentState.queue.length > 0) return;
+
+            const modes = ['work', 'break', 'longBreak'];
+            let currentIndex = modes.indexOf(currentState.sessionType);
+            
+            currentIndex = (currentIndex + increment) % modes.length;
+            if (currentIndex < 0) currentIndex = modes.length - 1;
+
+            const newType = modes[currentIndex];
+            const currentDuration = DURATION_MAP[newType];
+
+            const updates = {
+                sessionType: newType,
+                timeRemaining: currentDuration,
+                currentTask: LABEL_MAP[newType],
+            };
+            updateLocalState(updates);
+        };
+
+        prevModeButton.addEventListener('click', () => handleModeSwitch(-1));
+        nextModeButton.addEventListener('click', () => handleModeSwitch(1));
+
+        // --- QUEUE MODAL HANDLERS ---
+
+        queueButton.addEventListener('click', () => queueModal.style.display = 'flex');
+        closeModalButton.addEventListener('click', () => queueModal.style.display = 'none');
+        window.addEventListener('click', (event) => {
+            if (event.target === queueModal) {
+                queueModal.style.display = 'none';
             }
+        });
 
-            // Reset the current timer
-            function resetTimer() {
-                clearInterval(intervalId);
-                isRunning = false;
-                startButton.textContent = 'Start';
-                timerSeconds = currentDuration;
-                updateDisplay();
-            }
+        document.querySelectorAll('.add-task-btn').forEach(button => {
+            button.addEventListener('click', (e) => {
+                const type = e.currentTarget.getAttribute('data-type');
+                const rawName = taskNameInput.value.trim();
+                
+                // Use the typed name, or fall back to a default label
+                const name = rawName || `${LABEL_MAP[type].replace(' Session', '').replace(' Rest', '')} Session`; 
 
-            // Switch between work and break modes
-            function switchMode() {
-                clearInterval(intervalId);
-                isRunning = false;
-                startButton.textContent = 'Start';
+                const newItem = {
+                    id: Date.now() + Math.random(), 
+                    name: name,
+                    type: type,
+                };
 
-                if (isWorkSession) {
-                    timerLabel.textContent = 'Work Session';
-                    currentDuration = workDuration;
-                } else {
-                    timerLabel.textContent = 'Break Time';
-                    currentDuration = breakDuration;
-                }
-                timerSeconds = currentDuration;
-                updateDisplay();
-            }
-
-            // Event listeners for buttons
-            startButton.addEventListener('click', startTimer);
-            resetButton.addEventListener('click', resetTimer);
-
-            prevModeButton.addEventListener('click', () => {
-                isWorkSession = !isWorkSession;
-                switchMode();
+                const newQueue = [...currentState.queue, newItem];
+                
+                // Update the queue array locally
+                updateLocalState({ queue: newQueue });
+                taskNameInput.value = ''; // Clear input field
             });
+        });
 
-            nextModeButton.addEventListener('click', () => {
-                isWorkSession = !isWorkSession;
-                switchMode();
-            });
+        function handleDeleteTask(taskId) {
+            const newQueue = currentState.queue.filter(item => item.id != taskId);
+            updateLocalState({ queue: newQueue });
+        }
+        
+        clearQueueButton.addEventListener('click', () => {
+             updateLocalState({ queue: [] });
+        });
 
-            // Initial setup
-            updateDisplay();
-            lucide.createIcons(); // Initialize Lucide icons
-        })();
+        runQueueButton.addEventListener('click', () => {
+            if (currentState.queue.length === 0) return;
+
+            // Check if we are currently running, if so, do nothing but close the modal.
+            if (currentState.isRunning) {
+                 queueModal.style.display = 'none';
+                 return;
+            }
+
+            // Start the first session from the queue
+            startNextSession(currentState);
+            queueModal.style.display = 'none';
+        });
+
+        // --- INITIALIZATION ---
+        
+        function initMusicMap() {
+             MUSIC_MAP.work = document.getElementById('workMusic');
+             MUSIC_MAP.break = document.getElementById('breakMusic');
+             MUSIC_MAP.longBreak = document.getElementById('longBreakMusic');
+        }
+
+        window.onload = function () {
+            initMusicMap(); 
+            updateUI(INITIAL_STATE); // Initialize UI with default state
+            lucide.createIcons();
+        };
+
     </script>
 </body>
 </html>
-
