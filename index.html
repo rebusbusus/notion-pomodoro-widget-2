@@ -190,7 +190,7 @@
             padding: 0.75rem;
             border-radius: 4px;
         }
-        .work-border { border-left-color: #8a3024; } /* Brick Terracotta for work */
+        .work-border { border-left-color: #9F765A; } /* Brick Terracotta for work */
         .break-border { border-left-color: #586F5C; } /* Greenish for break */
         .long-break-border { border-left-color: #665a55; } /* Greyish for long break */
         
@@ -256,7 +256,7 @@
             <!-- Mute Button -->
             <button id="muteButton" class="mode-button p-2" title="Toggle Mute">
                 <!-- Initial high volume icon, updated by JS -->
-                <svg id="muteIcon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-volume-2 h-5 w-5"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+                <svg id="muteIcon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-volume-2 h-5 w-5"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 0 0 1 0 14.14"/></svg>
             </button>
 
             <!-- Volume Slider -->
@@ -432,7 +432,7 @@
         function updateVolume(volume) {
             const vol = parseFloat(volume);
             
-            // Set volume on all audio elements
+            // Set volume on all audio elements that are currently playing or paused
             Object.values(MUSIC_MAP).forEach(audio => {
                 audio.volume = vol;
             });
@@ -448,9 +448,9 @@
             if (currentVolume == 0) {
                 iconHtml = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-volume-x h-5 w-5"><path d="M11 5 6 9 2 9 2 15 6 15 11 19z"/><line x1="22" x2="16" y1="9" y2="15"/><line x1="16" x2="22" y1="9" y2="15"/></svg>`;
             } else if (currentVolume < 0.5) {
-                iconHtml = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-volume-1 h-5 w-5"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>`;
+                iconHtml = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-volume-1 h-5 w-5"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 0 0 1 0 7.07"/></svg>`;
             } else {
-                iconHtml = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-volume-2 h-5 w-5"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>`;
+                iconHtml = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-volume-2 h-5 w-5"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 0 0 1 0 14.14"/></svg>`;
             }
             muteButton.innerHTML = iconHtml;
         }
@@ -461,16 +461,28 @@
             return `${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
         }
 
+        // 🟢 FIXED: playMusic now only updates volume/resumes if already playing (no reset)
         function playMusic(type) {
+            const audio = MUSIC_MAP[type];
+            if (audio) {
+                // Only update volume, do NOT reset currentTime here.
+                audio.volume = parseFloat(volumeSlider.value); 
+                // Attempt to play/resume, catching the common promise error
+                audio.play().catch(e => {
+                    console.warn("Autoplay was prevented or resource failed to load. User interaction is required for audio playback.", e);
+                });
+            }
+        }
+        
+        // 🚀 NEW: Dedicated function to stop ALL music and START the correct one from the beginning
+        function startMusic(type) {
             // Stop all music first
             Object.values(MUSIC_MAP).forEach(audio => audio.pause());
 
             const audio = MUSIC_MAP[type];
             if (audio) {
-                // Use the current volume from the slider/state
                 audio.volume = parseFloat(volumeSlider.value); 
                 audio.currentTime = 0; // Ensure playback starts from the beginning
-                // Attempt to play, catching the common promise error
                 audio.play().catch(e => {
                     console.warn("Autoplay was prevented or resource failed to load. User interaction is required for audio playback.", e);
                 });
@@ -480,7 +492,8 @@
         function stopMusic() {
             Object.values(MUSIC_MAP).forEach(audio => {
                 audio.pause();
-                audio.currentTime = 0; // Reset music to start of track on next play
+                // We keep currentTime where it is on pause, so music resumes from the same spot if unpaused/restarted.
+                // Resetting to 0 is only done in startMusic()
             });
         }
 
@@ -603,9 +616,10 @@
 
             // --- Music, Tick, and Transition Control ---
             if (currentState.isRunning) {
-                // If starting or if the session type just changed, play music and alert
+                // If starting or if the session type just changed, start music from beginning and alert
                 if (!wasRunning || currentState.sessionType !== wasSessionType) {
-                    playMusic(currentState.sessionType);
+                    // 🚀 USE NEW startMusic FUNCTION
+                    startMusic(currentState.sessionType); 
                     playSessionAlert(currentState.sessionType); 
                 }
                 // Ensure local interval is running for smooth 1-second ticks
@@ -836,43 +850,62 @@
 
         // --- INITIALIZATION ---
         
-        function init() {
-            // Map audio elements to MUSIC_MAP
-            MUSIC_MAP.work = document.getElementById('workMusic');
-            MUSIC_MAP.break = document.getElementById('breakMusic');
-            MUSIC_MAP.longBreak = document.getElementById('longBreakMusic');
-            
-            // Set initial volume
-            updateVolume(volumeSlider.value);
+function init() {
+    // Map audio elements to MUSIC_MAP
+    MUSIC_MAP.work = document.getElementById('workMusic');
+    MUSIC_MAP.break = document.getElementById('breakMusic');
+    MUSIC_MAP.longBreak = document.getElementById('longBreakMusic');
+    
+    // Set initial volume
+    updateVolume(volumeSlider.value);
 
-            // Attach volume control listeners
-            volumeSlider.addEventListener('input', (e) => {
-                const newVolume = parseFloat(e.target.value);
-                updateVolume(newVolume);
-                lastVolume = newVolume; // Save last volume
-                isMuted = newVolume === 0;
-            });
-
-            muteButton.addEventListener('click', () => {
-                if (isMuted) {
-                    // Unmute
-                    const newVolume = lastVolume > 0 ? lastVolume : 0.1;
-                    updateVolume(newVolume);
-                    isMuted = false;
-                } else {
-                    // Mute
-                    lastVolume = parseFloat(volumeSlider.value); // Save current volume before muting
-                    updateVolume(0);
-                    isMuted = true;
-                    stopMusic(); // Stop music immediately on mute
-                }
-            });
-
-            // Set initial state
-            updateLocalState({});
+    // Attach volume control listeners
+    volumeSlider.addEventListener('input', (e) => {
+        const newVolume = parseFloat(e.target.value);
+        
+        // 🟢 FIX: Only call updateVolume, do not restart music on volume change
+        updateVolume(newVolume); 
+        
+        lastVolume = newVolume; // Save last volume
+        isMuted = newVolume === 0;
+        
+        // We only explicitly start music if we go from 0 volume (effectively muted) 
+        // to a positive volume while the session is running.
+        if (newVolume > 0 && currentState.isRunning && isMuted) {
+            playMusic(currentState.sessionType); // Use playMusic to resume from current position
+        } else if (newVolume === 0) {
+             // If volume is set to 0 via slider, stop music immediately
+            stopMusic(); 
         }
+        // If volume is changed from non-zero to non-zero, the audio.volume property 
+        // is updated by updateVolume(), and playback continues uninterrupted.
+    });
 
-        window.onload = init;
+    muteButton.addEventListener('click', () => {
+        if (isMuted) {
+            // Unmute
+            const newVolume = lastVolume > 0 ? lastVolume : 0.1;
+            updateVolume(newVolume);
+            isMuted = false;
+            
+            // If the timer is running, resume the music playback on unmute.
+            if (currentState.isRunning) {
+                playMusic(currentState.sessionType); 
+            }
+        } else {
+            // Mute
+            lastVolume = parseFloat(volumeSlider.value); // Save current volume before muting
+            updateVolume(0);
+            isMuted = true;
+            stopMusic(); // Stop music immediately on mute
+        }
+    });
+
+    // Set initial state
+    updateLocalState({});
+}
+
+window.onload = init;
     </script>
 </body>
 </html>
